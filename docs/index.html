@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Copilot Book Health Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e; --accent:#2f81f7;
+    --green:#3fb950; --yellow:#d29922; --red:#f85149;
+    --up:#3fb950; --down:#f85149;
+    --save:#f85149; --investigate:#d29922; --overage:#a371f7; --expand:#3fb950; --deepen:#2f81f7; --monitor:#8b949e;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;line-height:1.45;}
+  header{padding:22px 28px 18px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#161b22,#0d1117);}
+  header h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.2px;}
+  header .sub{color:var(--muted);margin-top:4px;font-size:13px;}
+  .wrap{padding:22px 28px 60px;max-width:1400px;margin:0 auto;}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+  .kpi.delta{border-width:2px;}
+  .kpi .val.up{color:var(--up);} .kpi .val.down{color:var(--down);}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+  .kpi .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;}
+  .kpi .val{font-size:26px;font-weight:680;margin-top:6px;letter-spacing:-.5px;}
+  .kpi .chg{font-size:12px;margin-top:4px;font-weight:600;}
+  .up{color:var(--up);} .down{color:var(--down);} .flat{color:var(--muted);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px;}
+  .grid3{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-bottom:24px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;box-shadow:var(--shadow);}
+  .card h2{margin:0 0 14px;font-size:14px;font-weight:640;display:flex;align-items:center;gap:8px;}
+  .card h2 .tag{font-size:11px;color:var(--muted);font-weight:500;}
+  canvas{max-height:280px;}
+  .controls{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .controls input,.controls select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    padding:7px 10px;border-radius:7px;font-size:13px;outline:none;}
+  .controls input{min-width:220px;}
+  .controls .spacer{flex:1;}
+  .pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;display:inline-block;}
+  .pill.Green{background:rgba(63,185,80,.15);color:var(--green);}
+  .pill.Yellow{background:rgba(210,153,34,.15);color:var(--yellow);}
+  .pill.Red{background:rgba(248,81,73,.15);color:var(--red);}
+  .pill.Unknown{background:rgba(139,148,158,.15);color:var(--muted);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel);}
+  th:hover{color:var(--text);}
+  tbody tr:hover{background:var(--panel2);}
+  .tbl-wrap{max-height:560px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+  .num{font-variant-numeric:tabular-nums;}
+  .risk-row td:first-child{border-left:3px solid var(--red);}
+  .recs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .rec{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:13px 15px;border-left:4px solid var(--monitor);}
+  .rec.SAVE{border-left-color:var(--save);}
+  .rec.INVESTIGATE{border-left-color:var(--investigate);}
+  .rec.OVERAGE{border-left-color:var(--overage);}
+  .rec.EXPAND{border-left-color:var(--expand);}
+  .rec.DEEPEN{border-left-color:var(--deepen);}
+  .rec .top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .rec .name{font-weight:660;font-size:14px;}
+  .rec .badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:20px;}
+  .rec.SAVE .badge{background:rgba(248,81,73,.15);color:var(--save);}
+  .rec.INVESTIGATE .badge{background:rgba(210,153,34,.15);color:var(--investigate);}
+  .rec.OVERAGE .badge{background:rgba(163,113,247,.15);color:var(--overage);}
+  .rec.EXPAND .badge{background:rgba(63,185,80,.15);color:var(--expand);}
+  .rec.DEEPEN .badge{background:rgba(47,129,247,.15);color:var(--deepen);}
+  .rec.MONITOR .badge{background:rgba(139,148,158,.15);color:var(--monitor);}
+  .rec .why{font-size:13px;margin-top:6px;line-height:1.5;}
+  .rec .play{color:var(--muted);font-size:12px;margin-top:7px;}
+  .rec .meta{font-size:11px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums;}
+  .footnote{color:var(--muted);font-size:11px;margin-top:18px;line-height:1.6;}
+  .sec-title{font-size:15px;font-weight:640;margin:6px 0 14px;letter-spacing:-.2px;}
+  .empty{color:var(--muted);font-size:13px;padding:24px;text-align:center;border:1px dashed var(--border);border-radius:9px;}
+  .corrbox{display:flex;gap:22px;align-items:center;margin-bottom:12px;}
+  .corrbox .big{font-size:30px;font-weight:700;letter-spacing:-.5px;}
+  .slegend{display:flex;flex-direction:column;gap:7px;}
+  .slegend .row{display:flex;align-items:center;gap:8px;font-size:12.5px;}
+  .slegend .sw{width:11px;height:11px;border-radius:3px;flex:none;}
+  .slegend .nm{flex:1;}
+  .slegend .amt{font-variant-numeric:tabular-nums;color:var(--muted);}
+  .surfmix{display:grid;grid-template-columns:190px 1fr;gap:16px;align-items:center;}
+  .surfbar{margin:2px 0 12px;}
+  .surfbar select{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;max-width:100%;}
+  .bwrow{margin-bottom:13px;}
+  .bwtop{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;}
+  .bwname{font-weight:620;}
+  .bwsub{font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums;}
+  .bwmore{margin-top:6px;width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .bwmore:hover{border-color:var(--muted);}
+  .bar{height:8px;border-radius:6px;background:var(--panel);border:1px solid var(--border);margin-top:5px;overflow:hidden;}
+  .bar>span{display:block;height:100%;border-radius:6px;}
+  .captype{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px;white-space:nowrap;}
+  .captype.hard{background:rgba(248,81,73,.15);color:var(--red);}
+  .captype.soft{background:rgba(210,153,34,.15);color:var(--yellow);}
+  .tsurface{font-size:11px;padding:2px 7px;border-radius:20px;background:var(--panel2);border:1px solid var(--border);color:var(--text);}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr);}.grid2,.grid3,.recs{grid-template-columns:1fr;}.surfmix{grid-template-columns:1fr;}}
+  .daily{display:flex;flex-wrap:wrap;align-items:center;gap:14px;background:var(--panel);
+    border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;
+    padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
+  .daily .dd-title{font-weight:650;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+  .dd-chip{display:flex;flex-direction:column;gap:2px;}
+  .dd-chip .dd-l{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+  .dd-chip .dd-v{font-size:15px;font-weight:650;}
+  .dd-v.up{color:var(--up);} .dd-v.down{color:var(--down);} .dd-v.flat{color:var(--text);}
+  .daily .dd-note{color:var(--muted);font-size:12px;margin-left:auto;max-width:520px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Copilot Book Health Tracker</h1>
+  <div class="sub" id="subhead"></div>
+</header>
+<div class="wrap">
+
+  <div id="dailyDelta"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="sec-title">Where to spend your time <span style="font-weight:400;color:var(--muted);font-size:13px;">— deterministic recommendations, ranked by impact</span></div>
+  <div class="card" style="margin-bottom:24px;">
+    <div class="recs" id="recs"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Top Seat Growth <span class="tag">assigned Copilot seats, MoM &Delta;</span></h2>
+      <canvas id="seatChart"></canvas>
+    </div>
+    <div class="card">
+      <h2>Top Consumption Growth <span class="tag">UBB gross usage, MoM</span></h2>
+      <canvas id="ubbChart"></canvas>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <h2>Churn &amp; Risk Watchlist <span class="tag">act before renewal</span></h2>
+      <div id="watch"></div>
+    </div>
+    <div class="card">
+      <h2>Book Health Mix <span class="tag">by Copilot health category</span></h2>
+      <canvas id="healthChart"></canvas>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Consumption by Copilot product <span class="tag">gross UBB $ by surface, current window</span></h2>
+      <div class="surfbar"><select id="surfFilter" aria-label="Filter product mix by account"></select></div>
+      <div id="surfaceWrap"></div>
+    </div>
+    <div class="card" id="budgetCard">
+      <h2>Budget &amp; cap watch <span class="tag">contracted Odometer budgets, % consumed &middot; top 10, expandable</span></h2>
+      <div id="budgetWatch"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <h2>Seat &Delta; vs Consumption &Delta; <span class="tag">MoM% by account &middot; bubble size = current UBB</span></h2>
+    <div id="quadNote" class="footnote" style="margin:0 0 12px;"></div>
+    <canvas id="quadChart" style="max-height:380px;"></canvas>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <h2>Engagement &harr; Usage <span class="tag">customer meetings (90d) vs Copilot consumption</span></h2>
+    <div id="engage"></div>
+  </div>
+
+  <div class="sec-title">Account detail</div>
+  <div class="controls">
+    <input id="search" type="text" placeholder="Search account..." />
+    <select id="healthFilter">
+      <option value="">All health</option>
+      <option value="Green">Green</option>
+      <option value="Yellow">Yellow</option>
+      <option value="Red">Red</option>
+    </select>
+    <select id="viewFilter">
+      <option value="">All accounts</option>
+      <option value="growth">Growing seats</option>
+      <option value="declining">Declining seats</option>
+      <option value="ubbup">Consumption up</option>
+      <option value="ubbdown">Consumption down</option>
+    </select>
+    <div class="spacer"></div>
+    <span class="footnote" style="margin:0;">Click a column header to sort</span>
+  </div>
+  <div class="tbl-wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-k="account">Account</th>
+          <th data-k="health">Health</th>
+          <th data-k="seats_now">Seats now</th>
+          <th data-k="seat_delta">Seats MoM</th>
+          <th data-k="seat_pct">Seat MoM%</th>
+          <th data-k="seats_3mo">Seats 3mo ago</th>
+          <th data-k="hwm">180d HWM</th>
+          <th data-k="engaged">Engaged</th>
+          <th data-k="util">Util%</th>
+          <th data-k="risk">Users at risk</th>
+          <th data-k="grr">GRR30</th>
+          <th data-k="cur_ubb">UBB gross (cur)</th>
+          <th data-k="net_cur">UBB net (cur)</th>
+          <th data-k="ubb_delta">UBB MoM $</th>
+          <th data-k="ubb_pct">UBB MoM%</th>
+          <th data-k="pool_util">Pool util%</th>
+          <th data-k="budget_pct">Budget used%</th>
+          <th data-k="budget_limit_type">Cap type</th>
+          <th data-k="top_surface">Top product</th>
+          <th data-k="meetings_90d">Mtgs 90d</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="footnote" id="footnote"></div>
+</div>
+
+<script>
+const META = /*META*/{"rep_name": "Cameron Raisedana", "segment": "MMAE / Corporate", "region": "AMER / HLS", "sales_owner_id": "0055c000009PVvtAAG", "as_of": "2026-08-06", "ubb_window": "Jun 1-30 vs Jul 1-31 (full months); engaged/pool snapshot as of Aug 4", "total_owned": 42};
+const BOOK = /*BOOK*/{"seats_now": 8413, "seats_1mo": 7856, "seats_3mo": 7337, "ubb_prev": 415690, "ubb_cur": 500738, "net_cur": 249893, "net_prev": 171364, "engaged_now": 2470, "overage_accounts": 10, "budget_accounts": 4, "budget_near_cap": 0, "surfaces": {"IDE (chat/completions)": 385953, "Third-party clients": 53045, "CLI / Agent": 38606, "Copilot App": 13138, "Other": 9442, "Mobile": 2}};
+const DATA = /*DATA*/[{"account": "Bazaarvoice", "salesforce_account_id": "001d000001Q3x4rAAB", "seats_now": 483.0, "seats_1mo": 349, "seats_3mo": 329, "seat_delta": 134, "seat_pct": 38.4, "hwm": 483, "risk": 122, "grr": 1.0, "health": "Green", "prev_ubb": 41189.0, "cur_ubb": 38534.0, "ai_units": 3853380, "net_prev": 28244, "net_cur": 24972, "engaged": 224, "projected_eom": 23816, "pool_dollars": 13900, "pool_util": 1.713, "surfaces": {"IDE (chat/completions)": 15570, "Third-party clients": 15221, "CLI / Agent": 6361, "Other": 1023, "Copilot App": 507, "Mobile": 2}, "ubb_delta": -2655, "ubb_pct": -6.4, "net_delta": -3272, "net_pct": -11.6, "util": 0.464, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Tenet Health", "salesforce_account_id": "0010V00002QlF7jQAF", "seats_now": 136.0, "seats_1mo": 94, "seats_3mo": 91, "seat_delta": 42, "seat_pct": 44.7, "hwm": 136, "risk": 49, "grr": 0.94, "health": "Green", "prev_ubb": 5475.0, "cur_ubb": 6429.0, "ai_units": 642898, "net_prev": 2507, "net_cur": 2574, "engaged": 37, "projected_eom": 3731, "pool_dollars": 3900, "pool_util": 0.957, "surfaces": {"IDE (chat/completions)": 6375, "Other": 1, "CLI / Agent": 1}, "ubb_delta": 954, "ubb_pct": 17.4, "net_delta": 67, "net_pct": 2.7, "util": 0.272, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Delta Dental of California", "salesforce_account_id": "001d000001ljY94AAE", "seats_now": 516.0, "seats_1mo": 473, "seats_3mo": 394, "seat_delta": 43, "seat_pct": 9.1, "hwm": 516, "risk": 108, "grr": 0.96, "health": "Green", "prev_ubb": 39629.0, "cur_ubb": 47528.0, "ai_units": 4752718, "net_prev": 4565, "net_cur": 11089, "engaged": 231, "projected_eom": 10963, "pool_dollars": 34440, "pool_util": 0.318, "surfaces": {"IDE (chat/completions)": 45519, "Third-party clients": 511, "CLI / Agent": 474, "Other": 344, "Copilot App": 96}, "budget_target": 26000, "budget_current": 3160, "budget_limit_type": "AlertingOnly", "ubb_delta": 7899, "ubb_pct": 19.9, "net_delta": 6524, "net_pct": 142.9, "util": 0.448, "budget_pct": 0.122, "meetings_90d": null, "last_met": null, "budget_scope": null, "top_surface": "IDE (chat/completions)"}, {"account": "Sentara Healthcare", "salesforce_account_id": "0013o00002VWznOAAT", "seats_now": 416.0, "seats_1mo": 379, "seats_3mo": 310, "seat_delta": 37, "seat_pct": 9.8, "hwm": 416, "risk": 187, "grr": 0.96, "health": "Yellow", "prev_ubb": 11461.0, "cur_ubb": 16273.0, "ai_units": 1627350, "net_prev": 0, "net_cur": 3309, "engaged": 109, "projected_eom": 5615, "pool_dollars": 11970, "pool_util": 0.469, "surfaces": {"IDE (chat/completions)": 15348, "Third-party clients": 330, "CLI / Agent": 256, "Copilot App": 169, "Other": 46}, "ubb_delta": 4812, "ubb_pct": 42.0, "net_delta": 3309, "net_pct": 0.0, "util": 0.262, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Zoetis", "salesforce_account_id": "001d000001eqddSAAQ", "seats_now": 555.0, "seats_1mo": 523, "seats_3mo": 487, "seat_delta": 32, "seat_pct": 6.1, "hwm": 555, "risk": 207, "grr": 0.96, "health": "Green", "prev_ubb": 28282.0, "cur_ubb": 49520.0, "ai_units": 4952029, "net_prev": 12394, "net_cur": 31861, "engaged": 177, "projected_eom": 34709, "pool_dollars": 15900, "pool_util": 2.183, "surfaces": {"IDE (chat/completions)": 41789, "Third-party clients": 4007, "CLI / Agent": 1447, "Copilot App": 1125, "Other": 546}, "budget_target": 30000, "budget_current": 0, "budget_limit_type": "PreventFurtherUsage", "ubb_delta": 21238, "ubb_pct": 75.1, "net_delta": 19467, "net_pct": 157.1, "util": 0.319, "budget_pct": 0.0, "meetings_90d": null, "last_met": null, "budget_scope": null, "top_surface": "IDE (chat/completions)"}, {"account": "Hims, Inc. (EMU)", "salesforce_account_id": "001Kg00000ALkEGIA1", "seats_now": 33.0, "seats_1mo": 7, "seats_3mo": null, "seat_delta": 26, "seat_pct": 371.4, "hwm": 33, "risk": 12, "grr": 0.78, "health": "Yellow", "prev_ubb": 0.0, "cur_ubb": 15.0, "ai_units": 1513, "net_prev": 0, "net_cur": 0, "engaged": 2, "projected_eom": 0, "pool_dollars": 990, "pool_util": 0.0, "surfaces": {"Other": 15, "Copilot App": 1}, "ubb_delta": 15, "ubb_pct": 0.0, "net_delta": 0, "net_pct": 0.0, "util": 0.061, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "Other"}, {"account": "Cleveland Clinic", "salesforce_account_id": "001d0000024lqPnAAI", "seats_now": 394.0, "seats_1mo": 372, "seats_3mo": 288, "seat_delta": 22, "seat_pct": 5.9, "hwm": 394, "risk": 163, "grr": 0.99, "health": "Yellow", "prev_ubb": 3407.0, "cur_ubb": 4787.0, "ai_units": 478705, "net_prev": 0, "net_cur": 0, "engaged": 92, "projected_eom": 0, "pool_dollars": 11820, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 3876, "Copilot App": 613, "CLI / Agent": 177, "Third-party clients": 106, "Other": 18}, "ubb_delta": 1380, "ubb_pct": 40.5, "net_delta": 0, "net_pct": 0.0, "util": 0.234, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Dentsply Sirona", "salesforce_account_id": "0013o00002TarCPAAZ", "seats_now": 549.0, "seats_1mo": 523, "seats_3mo": 455, "seat_delta": 26, "seat_pct": 5.0, "hwm": 549, "risk": 145, "grr": 0.99, "health": "Green", "prev_ubb": 51202.0, "cur_ubb": 49210.0, "ai_units": 4920994, "net_prev": 13964, "net_cur": 10573, "engaged": 74, "projected_eom": 27957, "pool_dollars": 13920, "pool_util": 2.008, "surfaces": {"IDE (chat/completions)": 39959, "CLI / Agent": 5381, "Third-party clients": 2624, "Copilot App": 742, "Other": 340}, "ubb_delta": -1992, "ubb_pct": -3.9, "net_delta": -3391, "net_pct": -24.3, "util": 0.135, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Sanford Health", "salesforce_account_id": "0010V00002KJfUjQAL", "seats_now": 40.0, "seats_1mo": 15, "seats_3mo": null, "seat_delta": 25, "seat_pct": 166.7, "hwm": 40, "risk": 8, "grr": 1.0, "health": "Green", "prev_ubb": 161.0, "cur_ubb": 304.0, "ai_units": 30320, "net_prev": 0, "net_cur": 0, "engaged": 13, "projected_eom": 0, "pool_dollars": 2590, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 258, "CLI / Agent": 50}, "ubb_delta": 143, "ubb_pct": 88.8, "net_delta": 0, "net_pct": 0.0, "util": 0.325, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Health Partners, Inc", "salesforce_account_id": "001d000001wDIWpAAO", "seats_now": 329.0, "seats_1mo": 309, "seats_3mo": 265, "seat_delta": 20, "seat_pct": 6.5, "hwm": 329, "risk": 63, "grr": 0.99, "health": "Green", "prev_ubb": 11322.0, "cur_ubb": 15302.0, "ai_units": 1530215, "net_prev": 2104, "net_cur": 5230, "engaged": 153, "projected_eom": 10826, "pool_dollars": 9750, "pool_util": 1.11, "surfaces": {"IDE (chat/completions)": 14580, "Other": 770, "CLI / Agent": 243, "Third-party clients": 44, "Copilot App": 1}, "ubb_delta": 3980, "ubb_pct": 35.2, "net_delta": 3126, "net_pct": 148.6, "util": 0.465, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Independence Blue Cross", "salesforce_account_id": "0013o00002S5c2sAAB", "seats_now": 349.0, "seats_1mo": 329, "seats_3mo": 308, "seat_delta": 20, "seat_pct": 6.1, "hwm": 349, "risk": 111, "grr": 0.98, "health": "Green", "prev_ubb": 10362.0, "cur_ubb": 12537.0, "ai_units": 1253767, "net_prev": 0, "net_cur": 0, "engaged": 121, "projected_eom": 0, "pool_dollars": 23450, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 12070, "Copilot App": 179, "Other": 126, "Third-party clients": 4, "CLI / Agent": 1}, "ubb_delta": 2175, "ubb_pct": 21.0, "net_delta": 0, "net_pct": 0.0, "util": 0.347, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Hims, Inc.", "salesforce_account_id": "0013o00002VYLbSAAX", "seats_now": 228.0, "seats_1mo": 215, "seats_3mo": 204, "seat_delta": 13, "seat_pct": 6.0, "hwm": 229, "risk": 186, "grr": 1.0, "health": "Red", "prev_ubb": 320.0, "cur_ubb": 387.0, "ai_units": 38691, "net_prev": 0, "net_cur": 0, "engaged": 16, "projected_eom": 0, "pool_dollars": 6690, "pool_util": 0.0, "surfaces": {"Other": 379, "IDE (chat/completions)": 10}, "ubb_delta": 67, "ubb_pct": 20.9, "net_delta": 0, "net_pct": 0.0, "util": 0.07, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "Other"}, {"account": "i2c", "salesforce_account_id": "0015c00002p1T0FAAU", "seats_now": 651.0, "seats_1mo": 628, "seats_3mo": 589, "seat_delta": 23, "seat_pct": 3.7, "hwm": 651, "risk": 224, "grr": 1.0, "health": "Green", "prev_ubb": 20726.0, "cur_ubb": 7024.0, "ai_units": 702368, "net_prev": 2017, "net_cur": 0, "engaged": 60, "projected_eom": 0, "pool_dollars": 19050, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 5921, "CLI / Agent": 1047, "Third-party clients": 56, "Copilot App": 19}, "ubb_delta": -13702, "ubb_pct": -66.1, "net_delta": -2017, "net_pct": -100.0, "util": 0.092, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Advantasure (UST Healthproof)", "salesforce_account_id": "0013o00002S6mIPAAZ", "seats_now": 324.0, "seats_1mo": 314, "seats_3mo": 235, "seat_delta": 10, "seat_pct": 3.2, "hwm": 326, "risk": 59, "grr": 0.98, "health": "Green", "prev_ubb": 3640.0, "cur_ubb": 2844.0, "ai_units": 284432, "net_prev": 0, "net_cur": 0, "engaged": 105, "projected_eom": 0, "pool_dollars": 9840, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 2797, "Other": 57, "Third-party clients": 1, "Copilot App": 1}, "ubb_delta": -796, "ubb_pct": -21.9, "net_delta": 0, "net_pct": 0.0, "util": 0.324, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Schonfeld", "salesforce_account_id": "001d0000027SUTDAA4", "seats_now": 310.0, "seats_1mo": 299, "seats_3mo": 278, "seat_delta": 11, "seat_pct": 3.7, "hwm": 310, "risk": 85, "grr": 0.98, "health": "Green", "prev_ubb": 21828.0, "cur_ubb": 28943.0, "ai_units": 2894285, "net_prev": 12350, "net_cur": 19391, "engaged": 77, "projected_eom": 20696, "pool_dollars": 9120, "pool_util": 2.269, "surfaces": {"IDE (chat/completions)": 21742, "CLI / Agent": 6782, "Other": 23, "Third-party clients": 13, "Copilot App": 2}, "budget_target": 22000, "budget_current": 0, "budget_limit_type": "PreventFurtherUsage", "ubb_delta": 7115, "ubb_pct": 32.6, "net_delta": 7041, "net_pct": 57.0, "util": 0.248, "budget_pct": 0.0, "meetings_90d": null, "last_met": null, "budget_scope": null, "top_surface": "IDE (chat/completions)"}, {"account": "Mercy", "salesforce_account_id": "0013o00002S6MacAAF", "seats_now": 141.0, "seats_1mo": 131, "seats_3mo": 106, "seat_delta": 10, "seat_pct": 7.6, "hwm": 141, "risk": 59, "grr": 1.0, "health": "Yellow", "prev_ubb": 5569.0, "cur_ubb": 4968.0, "ai_units": 496820, "net_prev": 1378, "net_cur": 0, "engaged": 28, "projected_eom": 0, "pool_dollars": 8890, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 2110, "Copilot App": 1616, "CLI / Agent": 891, "Third-party clients": 277}, "ubb_delta": -601, "ubb_pct": -10.8, "net_delta": -1378, "net_pct": -100.0, "util": 0.199, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Henry Schein, Inc", "salesforce_account_id": "001d000001wEV58AAG", "seats_now": 86.0, "seats_1mo": 77, "seats_3mo": 75, "seat_delta": 9, "seat_pct": 11.7, "hwm": 95, "risk": 22, "grr": 1.0, "health": "Green", "prev_ubb": 691.0, "cur_ubb": 814.0, "ai_units": 81408, "net_prev": 0, "net_cur": 0, "engaged": 35, "projected_eom": 0, "pool_dollars": 3580, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 586, "Other": 244, "Copilot App": 4}, "ubb_delta": 123, "ubb_pct": 17.8, "net_delta": 0, "net_pct": 0.0, "util": 0.407, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "BAYLOR SCOTT AND WHITE HEALTH", "salesforce_account_id": "0010V00002O1lZhQAJ", "seats_now": 323.0, "seats_1mo": 312, "seats_3mo": 297, "seat_delta": 11, "seat_pct": 3.5, "hwm": 331, "risk": 70, "grr": 0.94, "health": "Green", "prev_ubb": 39223.0, "cur_ubb": 66806.0, "ai_units": 6680607, "net_prev": 17301, "net_cur": 43896, "engaged": 148, "projected_eom": 36414, "pool_dollars": 21690, "pool_util": 1.679, "surfaces": {"IDE (chat/completions)": 53729, "CLI / Agent": 10560, "Other": 1373, "Copilot App": 1285, "Third-party clients": 412}, "budget_target": 15600, "budget_current": 1985, "budget_limit_type": "AlertingOnly", "ubb_delta": 27583, "ubb_pct": 70.3, "net_delta": 26595, "net_pct": 153.7, "util": 0.458, "budget_pct": 0.127, "meetings_90d": null, "last_met": null, "budget_scope": null, "top_surface": "IDE (chat/completions)"}, {"account": "R Systems International Ltd", "salesforce_account_id": "0013o00002OHrfMAAT", "seats_now": 340.0, "seats_1mo": 332, "seats_3mo": 326, "seat_delta": 8, "seat_pct": 2.4, "hwm": 401, "risk": 101, "grr": 0.94, "health": "Green", "prev_ubb": 19821.0, "cur_ubb": 29116.0, "ai_units": 2911563, "net_prev": 9197, "net_cur": 18411, "engaged": 104, "projected_eom": 21083, "pool_dollars": 9900, "pool_util": 2.13, "surfaces": {"IDE (chat/completions)": 27422, "CLI / Agent": 779, "Third-party clients": 500, "Other": 198, "Copilot App": 26}, "ubb_delta": 9295, "ubb_pct": 46.9, "net_delta": 9214, "net_pct": 100.2, "util": 0.306, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Mastery Logistics", "salesforce_account_id": "0013o00002VXKeGAAX", "seats_now": 443.0, "seats_1mo": 435, "seats_3mo": 420, "seat_delta": 8, "seat_pct": 1.8, "hwm": 445, "risk": 74, "grr": 0.99, "health": "Green", "prev_ubb": 74596.0, "cur_ubb": 86963.0, "ai_units": 8696357, "net_prev": 59856, "net_cur": 71961, "engaged": 282, "projected_eom": 73750, "pool_dollars": 14530, "pool_util": 5.076, "surfaces": {"IDE (chat/completions)": 49760, "Third-party clients": 28587, "Copilot App": 6078, "Other": 1972, "CLI / Agent": 1251}, "ubb_delta": 12367, "ubb_pct": 16.6, "net_delta": 12105, "net_pct": 20.2, "util": 0.637, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "GoodRx - Cloud", "salesforce_account_id": "0010V00002PmjvFQAR", "seats_now": 7.0, "seats_1mo": 2, "seats_3mo": 156, "seat_delta": 5, "seat_pct": 250.0, "hwm": 156, "risk": 4, "grr": 0.5, "health": "Red", "prev_ubb": 8.0, "cur_ubb": 21.0, "ai_units": 2100, "surfaces": {"IDE (chat/completions)": 21}, "ubb_delta": 13, "ubb_pct": 162.5, "meetings_90d": null, "last_met": null, "net_prev": null, "net_cur": null, "engaged": null, "projected_eom": null, "pool_dollars": null, "pool_util": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)", "net_delta": null, "net_pct": null, "util": null}, {"account": "EmblemHealth", "salesforce_account_id": "0013o00002S5MapAAF", "seats_now": 85.0, "seats_1mo": 79, "seats_3mo": 46, "seat_delta": 6, "seat_pct": 7.6, "hwm": 85, "risk": 45, "grr": 0.98, "health": "Yellow", "prev_ubb": 861.0, "cur_ubb": 3327.0, "ai_units": 332780, "net_prev": 0, "net_cur": 423, "engaged": 24, "projected_eom": 0, "pool_dollars": 2430, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 3377, "Copilot App": 5, "Other": 2}, "ubb_delta": 2466, "ubb_pct": 286.4, "net_delta": 423, "net_pct": 0.0, "util": 0.282, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Mount Sinai Medical Center", "salesforce_account_id": "001d000001Q3wfYAAR", "seats_now": 14.0, "seats_1mo": 11, "seats_3mo": 42, "seat_delta": 3, "seat_pct": 27.3, "hwm": 47, "risk": 6, "grr": 1.0, "health": "Yellow", "prev_ubb": 97.0, "cur_ubb": 1082.0, "ai_units": 108265, "net_prev": 0, "net_cur": 593, "engaged": 8, "projected_eom": 783, "pool_dollars": 420, "pool_util": 1.864, "surfaces": {"IDE (chat/completions)": 1039, "Other": 33}, "ubb_delta": 985, "ubb_pct": 1015.5, "net_delta": 593, "net_pct": 0.0, "util": 0.571, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Best Western Hotel Group", "salesforce_account_id": "001Kg00000ALXRVIA5", "seats_now": 318.0, "seats_1mo": 316, "seats_3mo": 313, "seat_delta": 2, "seat_pct": 0.6, "hwm": 352, "risk": 157, "grr": 1.0, "health": "Yellow", "prev_ubb": 2933.0, "cur_ubb": 4289.0, "ai_units": 428923, "net_prev": 0, "net_cur": 0, "engaged": 79, "projected_eom": 0, "pool_dollars": 9060, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 3809, "CLI / Agent": 308, "Copilot App": 101, "Other": 52}, "ubb_delta": 1356, "ubb_pct": 46.2, "net_delta": 0, "net_pct": 0.0, "util": 0.248, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "GoFundMe", "salesforce_account_id": "0013o00002OHavEAAT", "seats_now": 108.0, "seats_1mo": 106, "seats_3mo": 99, "seat_delta": 2, "seat_pct": 1.9, "hwm": 109, "risk": 50, "grr": 0.99, "health": "Yellow", "prev_ubb": 1172.0, "cur_ubb": 3003.0, "ai_units": 300288, "net_prev": 0, "net_cur": 0, "engaged": 10, "projected_eom": 0, "pool_dollars": 3240, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 2223, "CLI / Agent": 567, "Other": 140, "Third-party clients": 51, "Copilot App": 15}, "ubb_delta": 1831, "ubb_pct": 156.2, "net_delta": 0, "net_pct": 0.0, "util": 0.093, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Emerge Bright", "salesforce_account_id": "001Kg00000EP555IAD", "seats_now": 8.0, "seats_1mo": 6, "seats_3mo": null, "seat_delta": 2, "seat_pct": 33.3, "hwm": 8, "risk": 3, "grr": 1.0, "health": "Green", "prev_ubb": 487.0, "cur_ubb": 1666.0, "ai_units": 166688, "net_prev": 75, "net_cur": 1014, "engaged": 2, "projected_eom": 1595, "pool_dollars": 560, "pool_util": 2.848, "surfaces": {"IDE (chat/completions)": 1628, "Other": 1}, "ubb_delta": 1179, "ubb_pct": 242.1, "net_delta": 939, "net_pct": 1252.0, "util": 0.25, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Christiana Care", "salesforce_account_id": "0015c000027AHQvAAO", "seats_now": 16.0, "seats_1mo": 14, "seats_3mo": 14, "seat_delta": 2, "seat_pct": 14.3, "hwm": 16, "risk": 12, "grr": 1.0, "health": "Red", "prev_ubb": 187.0, "cur_ubb": 161.0, "ai_units": 16123, "net_prev": 0, "net_cur": 0, "engaged": 3, "projected_eom": 0, "pool_dollars": 450, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 157, "Copilot App": 3}, "ubb_delta": -26, "ubb_pct": -13.9, "net_delta": 0, "net_pct": 0.0, "util": 0.188, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "St. Lukes University Healthcare", "salesforce_account_id": "0013o00002TbvawAAB", "seats_now": 11.0, "seats_1mo": 10, "seats_3mo": 9, "seat_delta": 1, "seat_pct": 10.0, "hwm": 12, "risk": 1, "grr": 1.0, "health": "Green", "prev_ubb": 134.0, "cur_ubb": 72.0, "ai_units": 7092, "net_prev": 0, "net_cur": 0, "engaged": 5, "projected_eom": 0, "pool_dollars": 390, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 45, "Other": 16, "CLI / Agent": 10}, "ubb_delta": -62, "ubb_pct": -46.3, "net_delta": 0, "net_pct": 0.0, "util": 0.455, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Covetrus", "salesforce_account_id": "0010V00002RDT8pQAH", "seats_now": 195.0, "seats_1mo": 194, "seats_3mo": 193, "seat_delta": 1, "seat_pct": 0.5, "hwm": 206, "risk": 67, "grr": 0.99, "health": "Green", "prev_ubb": 4491.0, "cur_ubb": 5988.0, "ai_units": 598756, "net_prev": 2363, "net_cur": 3255, "engaged": 73, "projected_eom": 1590, "pool_dollars": 13600, "pool_util": 0.117, "surfaces": {"IDE (chat/completions)": 4858, "Other": 579, "CLI / Agent": 219, "Third-party clients": 177, "Copilot App": 151}, "ubb_delta": 1497, "ubb_pct": 33.3, "net_delta": 892, "net_pct": 37.7, "util": 0.374, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Magnite", "salesforce_account_id": "001d000001Q3wQJAAZ", "seats_now": 206.0, "seats_1mo": 204, "seats_3mo": 205, "seat_delta": 2, "seat_pct": 1.0, "hwm": 230, "risk": 114, "grr": 1.0, "health": "Yellow", "prev_ubb": 2315.0, "cur_ubb": 2387.0, "ai_units": 238693, "net_prev": 0, "net_cur": 0, "engaged": 21, "projected_eom": 0, "pool_dollars": 6120, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 2360, "Third-party clients": 45, "Other": 4}, "ubb_delta": 72, "ubb_pct": 3.1, "net_delta": 0, "net_pct": 0.0, "util": 0.102, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Options Clearing Corporation", "salesforce_account_id": "0010V00002IcXxaQAF", "seats_now": 8.0, "seats_1mo": 7, "seats_3mo": 22, "seat_delta": 1, "seat_pct": 14.3, "hwm": 24, "risk": 8, "grr": 1.0, "health": "Red", "prev_ubb": 0.0, "cur_ubb": 0.0, "ai_units": 0, "ubb_delta": 0, "ubb_pct": 0.0, "meetings_90d": null, "last_met": null, "net_prev": null, "net_cur": null, "engaged": null, "projected_eom": null, "pool_dollars": null, "pool_util": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "surfaces": null, "top_surface": null, "net_delta": null, "net_pct": null, "util": null}, {"account": "Ohio Health - dotcom - OhioHealth - Cloud", "salesforce_account_id": "0010V00002IdXTbQAN", "seats_now": 16.0, "seats_1mo": 13, "seats_3mo": 14, "seat_delta": 3, "seat_pct": 23.1, "hwm": 18, "risk": 3, "grr": 0.87, "health": "Green", "prev_ubb": 202.0, "cur_ubb": 284.0, "ai_units": 28367, "net_prev": 0, "net_cur": 0, "engaged": 12, "projected_eom": 0, "pool_dollars": 450, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 268, "Other": 13, "Copilot App": 1}, "ubb_delta": 82, "ubb_pct": 40.6, "net_delta": 0, "net_pct": 0.0, "util": 0.75, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Dynata", "salesforce_account_id": "001d000001tJ4H5AAK", "seats_now": 90.0, "seats_1mo": 90, "seats_3mo": 85, "seat_delta": 0, "seat_pct": 0.0, "hwm": 92, "risk": 22, "grr": 1.0, "health": "Green", "prev_ubb": 4174.0, "cur_ubb": 3622.0, "ai_units": 362186, "net_prev": 1443, "net_cur": 964, "engaged": 50, "projected_eom": 1602, "pool_dollars": 2730, "pool_util": 0.587, "surfaces": {"IDE (chat/completions)": 2029, "CLI / Agent": 797, "Other": 395, "Copilot App": 368, "Third-party clients": 7}, "ubb_delta": -552, "ubb_pct": -13.2, "net_delta": -479, "net_pct": -33.2, "util": 0.556, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Atlantic Health System", "salesforce_account_id": "0010V00002NJiQjQAL", "seats_now": 19.0, "seats_1mo": 20, "seats_3mo": 29, "seat_delta": -1, "seat_pct": -5.0, "hwm": 29, "risk": 0, "grr": 0.74, "health": "Green", "prev_ubb": 1898.0, "cur_ubb": 928.0, "ai_units": 92815, "net_prev": 1027, "net_cur": 377, "engaged": 15, "projected_eom": 425, "pool_dollars": 600, "pool_util": 0.708, "surfaces": {"IDE (chat/completions)": 698, "CLI / Agent": 154, "Other": 58, "Copilot App": 24}, "ubb_delta": -970, "ubb_pct": -51.1, "net_delta": -650, "net_pct": -63.3, "util": 0.789, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Children's Mercy Hospital", "salesforce_account_id": "0013o00002XTtieAAD", "seats_now": 11.0, "seats_1mo": 10, "seats_3mo": 8, "seat_delta": 1, "seat_pct": 10.0, "hwm": 11, "risk": 3, "grr": 1.0, "health": "Green", "prev_ubb": 78.0, "cur_ubb": 73.0, "ai_units": 7291, "net_prev": 0, "net_cur": 0, "engaged": 1, "projected_eom": 0, "pool_dollars": 700, "pool_util": 0.0, "surfaces": {"Third-party clients": 59, "IDE (chat/completions)": 16}, "ubb_delta": -5, "ubb_pct": -6.4, "net_delta": 0, "net_pct": 0.0, "util": 0.091, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "Third-party clients"}, {"account": "Gong", "salesforce_account_id": "0013o00002S5CGHAA3", "seats_now": 261.0, "seats_1mo": 259, "seats_3mo": 262, "seat_delta": 2, "seat_pct": 0.8, "hwm": 265, "risk": 168, "grr": 0.99, "health": "Yellow", "prev_ubb": 155.0, "cur_ubb": 83.0, "ai_units": 8259, "net_prev": 0, "net_cur": 0, "engaged": 12, "projected_eom": 0, "pool_dollars": 7650, "pool_util": 0.0, "surfaces": {"Other": 49, "IDE (chat/completions)": 34}, "ubb_delta": -72, "ubb_pct": -46.5, "net_delta": 0, "net_pct": 0.0, "util": 0.046, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "Other"}, {"account": "Whatnot", "salesforce_account_id": "0015c0000230m1vAAA", "seats_now": 46.0, "seats_1mo": 45, "seats_3mo": 54, "seat_delta": 1, "seat_pct": 2.2, "hwm": 59, "risk": 33, "grr": 0.94, "health": "Red", "prev_ubb": 0.0, "cur_ubb": 0.0, "ai_units": 0, "ubb_delta": 0, "ubb_pct": 0.0, "meetings_90d": null, "last_met": null, "net_prev": null, "net_cur": null, "engaged": null, "projected_eom": null, "pool_dollars": null, "pool_util": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "surfaces": null, "top_surface": null, "net_delta": null, "net_pct": null, "util": null}, {"account": "Inova.org", "salesforce_account_id": "001Kg00000C3e7AIAR", "seats_now": 25.0, "seats_1mo": 26, "seats_3mo": 20, "seat_delta": -1, "seat_pct": -3.8, "hwm": 26, "risk": 8, "grr": 1.0, "health": "Green", "prev_ubb": 1532.0, "cur_ubb": 1274.0, "ai_units": 127468, "net_prev": 54, "net_cur": 0, "engaged": 12, "projected_eom": 0, "pool_dollars": 1630, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 899, "Other": 373, "Copilot App": 6}, "ubb_delta": -258, "ubb_pct": -16.8, "net_delta": -54, "net_pct": -100.0, "util": 0.48, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Jam City", "salesforce_account_id": "0010V00002DT2jbQAD", "seats_now": 15.0, "seats_1mo": 15, "seats_3mo": 17, "seat_delta": 0, "seat_pct": 0.0, "hwm": 17, "risk": 9, "grr": 1.0, "health": "Yellow", "prev_ubb": 64.0, "cur_ubb": 46.0, "ai_units": 4653, "net_prev": 0, "net_cur": 0, "engaged": 2, "projected_eom": 0, "pool_dollars": 450, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 47}, "ubb_delta": -18, "ubb_pct": -28.1, "net_delta": 0, "net_pct": 0.0, "util": 0.133, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Bill & Melinda Gates Foundation", "salesforce_account_id": "001d000002AnLuZAAV", "seats_now": 213.0, "seats_1mo": 212, "seats_3mo": 215, "seat_delta": 1, "seat_pct": 0.5, "hwm": 401, "risk": 111, "grr": 0.99, "health": "Yellow", "prev_ubb": 1878.0, "cur_ubb": 1466.0, "ai_units": 146516, "net_prev": 0, "net_cur": 0, "engaged": 24, "projected_eom": 0, "pool_dollars": 6120, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 1218, "Other": 244, "Third-party clients": 13}, "ubb_delta": -412, "ubb_pct": -21.9, "net_delta": 0, "net_pct": 0.0, "util": 0.113, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "Sutter Health", "salesforce_account_id": "001d000001tdHsgAAE", "seats_now": 92.0, "seats_1mo": 94, "seats_3mo": 70, "seat_delta": -2, "seat_pct": -2.1, "hwm": 95, "risk": 35, "grr": 0.99, "health": "Green", "prev_ubb": 3590.0, "cur_ubb": 2660.0, "ai_units": 265978, "net_prev": 525, "net_cur": 0, "engaged": 27, "projected_eom": 0, "pool_dollars": 3140, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 1804, "CLI / Agent": 850, "Other": 8}, "ubb_delta": -930, "ubb_pct": -25.9, "net_delta": -525, "net_pct": -100.0, "util": 0.293, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}, {"account": "AMERIHEALTH CARITAS", "salesforce_account_id": "0013o00002OHrf3AAD", "seats_now": 3.0, "seats_1mo": null, "seats_3mo": null, "seat_delta": null, "seat_pct": 0, "hwm": 3, "risk": 3, "grr": 1.0, "health": "Red", "prev_ubb": 0.0, "cur_ubb": 2.0, "ai_units": 244, "net_prev": 0, "net_cur": 0, "engaged": 2, "projected_eom": 0, "pool_dollars": 210, "pool_util": 0.0, "surfaces": {"IDE (chat/completions)": 2}, "ubb_delta": 2, "ubb_pct": 0.0, "net_delta": 0, "net_pct": 0.0, "util": 0.667, "meetings_90d": null, "last_met": null, "budget_target": null, "budget_current": null, "budget_limit_type": null, "budget_scope": null, "budget_pct": null, "top_surface": "IDE (chat/completions)"}];
+const RECS = /*RECS*/[{"account": "Atlantic Health System", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Retention has fallen to 74% of seats (healthy is 90% or higher); usage fell 51% this month; seats are 34% below their 180-day high of 29.", "play": "What to do: usage dropped 51% this month. Find the teams that went quiet and re-engage their leads before it lands in the renewal number.", "attention": 6000947.0, "cur_ubb": 928.0, "cur_net": 377.0, "util": 0.789, "pool_util": 0.708, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 19.0, "health": "Green"}, {"account": "Hims, Inc.", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because 82% of seats are at risk (186 of 228).", "play": "What to do: 82% of seats (186 of 228) are inactive. This is shelfware that will get cut at renewal. Line up enablement for the dormant users now and an executive value review on what has actually been delivered.", "attention": 6000615.0, "cur_ubb": 387.0, "cur_net": 0.0, "util": 0.07, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "Other", "seats_now": 228.0, "health": "Red"}, {"account": "Ohio Health - dotcom - OhioHealth - Cloud", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Retention has fallen to 87% of seats (healthy is 90% or higher); seats are 11% below their 180-day high of 18.", "play": "What to do: book an executive health review this week, find the root cause of the drop, and put a written renewal-save plan in place.", "attention": 6000300.0, "cur_ubb": 284.0, "cur_net": 0.0, "util": 0.75, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 16.0, "health": "Green"}, {"account": "Christiana Care", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because 75% of seats are at risk (12 of 16).", "play": "What to do: 75% of seats (12 of 16) are inactive. This is shelfware that will get cut at renewal. Line up enablement for the dormant users now and an executive value review on what has actually been delivered.", "attention": 6000177.0, "cur_ubb": 161.0, "cur_net": 0.0, "util": 0.188, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 16.0, "health": "Red"}, {"account": "Hims, Inc. (EMU)", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Retention has fallen to 78% of seats (healthy is 90% or higher); 36% of seats are at risk (12 of 33).", "play": "What to do: 36% of seats are inactive, so this is shelfware heading into renewal. Schedule enablement for the dormant users and an executive value review on what has been delivered.", "attention": 6000048.0, "cur_ubb": 15.0, "cur_net": 0.0, "util": 0.061, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "Other", "seats_now": 33.0, "health": "Yellow"}, {"account": "Whatnot", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because 72% of seats are at risk (33 of 46), seats are 22% below their 180-day high of 59.", "play": "What to do: 72% of seats (33 of 46) are inactive. This is shelfware that will get cut at renewal. Line up enablement for the dormant users now and an executive value review on what has actually been delivered.", "attention": 6000046.0, "cur_ubb": 0.0, "cur_net": null, "util": null, "pool_util": null, "budget_pct": null, "budget_limit_type": null, "top_surface": null, "seats_now": 46.0, "health": "Red"}, {"account": "GoodRx - Cloud", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because retention has fallen to 50% of seats (healthy is 90% or higher), 57% of seats are at risk (4 of 7), seats are 96% below their 180-day high of 156.", "play": "What to do: 57% of seats are inactive, so this is shelfware heading into renewal. Schedule enablement for the dormant users and an executive value review on what has been delivered.", "attention": 6000028.0, "cur_ubb": 21.0, "cur_net": null, "util": null, "pool_util": null, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 7.0, "health": "Red"}, {"account": "Options Clearing Corporation", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because 100% of seats are at risk (8 of 8), seats are 67% below their 180-day high of 24.", "play": "What to do: 100% of seats (8 of 8) are inactive. This is shelfware that will get cut at renewal. Line up enablement for the dormant users now and an executive value review on what has actually been delivered.", "attention": 6000008.0, "cur_ubb": 0.0, "cur_net": null, "util": null, "pool_util": null, "budget_pct": null, "budget_limit_type": null, "top_surface": null, "seats_now": 8.0, "health": "Red"}, {"account": "AMERIHEALTH CARITAS", "bucket": "SAVE", "bucket_label": "Save / intervene", "why": "Flagged red because 100% of seats are at risk (3 of 3).", "play": "What to do: 100% of seats (3 of 3) are inactive. This is shelfware that will get cut at renewal. Line up enablement for the dormant users now and an executive value review on what has actually been delivered.", "attention": 6000005.0, "cur_ubb": 2.0, "cur_net": 0.0, "util": 0.667, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 3.0, "health": "Red"}, {"account": "i2c", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 66% this month even though the seat count held steady.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5007675.0, "cur_ubb": 7024.0, "cur_net": 0.0, "util": 0.092, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 651.0, "health": "Green"}, {"account": "Advantasure (UST Healthproof)", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 22% this month even though the seat count held steady.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5003168.0, "cur_ubb": 2844.0, "cur_net": 0.0, "util": 0.324, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 324.0, "health": "Green"}, {"account": "Bill & Melinda Gates Foundation", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 22% this month even though the seat count held steady; seats are still below their 180-day high.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5001679.0, "cur_ubb": 1466.0, "cur_net": 0.0, "util": 0.113, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 213.0, "health": "Yellow"}, {"account": "Gong", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 46% this month even though the seat count held steady.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5000344.0, "cur_ubb": 83.0, "cur_net": 0.0, "util": 0.046, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "Other", "seats_now": 261.0, "health": "Yellow"}, {"account": "St. Lukes University Healthcare", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 46% this month even though the seat count held steady.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5000083.0, "cur_ubb": 72.0, "cur_net": 0.0, "util": 0.455, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 11.0, "health": "Green"}, {"account": "Jam City", "bucket": "INVESTIGATE", "bucket_label": "Investigate", "why": "Usage fell 28% this month even though the seat count held steady; seats are still below their 180-day high.", "play": "What to do: find which teams stopped using Copilot and re-engage their champions before it shows up at renewal.", "attention": 5000061.0, "cur_ubb": 46.0, "cur_net": 0.0, "util": 0.133, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 15.0, "health": "Yellow"}, {"account": "Mastery Logistics", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 508% of the included usage pool this month; month-end run rate is about $73,750 against a $14,530 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4087406.0, "cur_ubb": 86963.0, "cur_net": 71961.0, "util": 0.637, "pool_util": 5.076, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 443.0, "health": "Green"}, {"account": "BAYLOR SCOTT AND WHITE HEALTH", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 168% of the included usage pool this month; month-end run rate is about $36,414 against a $21,690 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4067129.0, "cur_ubb": 66806.0, "cur_net": 43896.0, "util": 0.458, "pool_util": 1.679, "budget_pct": 0.127, "budget_limit_type": "AlertingOnly", "top_surface": "IDE (chat/completions)", "seats_now": 323.0, "health": "Green"}, {"account": "Zoetis", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 218% of the included usage pool this month; month-end run rate is about $34,709 against a $15,900 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4050075.0, "cur_ubb": 49520.0, "cur_net": 31861.0, "util": 0.319, "pool_util": 2.183, "budget_pct": 0.0, "budget_limit_type": "PreventFurtherUsage", "top_surface": "IDE (chat/completions)", "seats_now": 555.0, "health": "Green"}, {"account": "Dentsply Sirona", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 201% of the included usage pool this month; month-end run rate is about $27,957 against a $13,920 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4049759.0, "cur_ubb": 49210.0, "cur_net": 10573.0, "util": 0.135, "pool_util": 2.008, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 549.0, "health": "Green"}, {"account": "Bazaarvoice", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 171% of the included usage pool this month; month-end run rate is about $23,816 against a $13,900 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4039017.0, "cur_ubb": 38534.0, "cur_net": 24972.0, "util": 0.464, "pool_util": 1.713, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 483.0, "health": "Green"}, {"account": "R Systems International Ltd", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 213% of the included usage pool this month; month-end run rate is about $21,083 against a $9,900 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4029456.0, "cur_ubb": 29116.0, "cur_net": 18411.0, "util": 0.306, "pool_util": 2.13, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 340.0, "health": "Green"}, {"account": "Schonfeld", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 227% of the included usage pool this month; month-end run rate is about $20,696 against a $9,120 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4029253.0, "cur_ubb": 28943.0, "cur_net": 19391.0, "util": 0.248, "pool_util": 2.269, "budget_pct": 0.0, "budget_limit_type": "PreventFurtherUsage", "top_surface": "IDE (chat/completions)", "seats_now": 310.0, "health": "Green"}, {"account": "Health Partners, Inc", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 111% of the included usage pool this month; month-end run rate is about $10,826 against a $9,750 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4015631.0, "cur_ubb": 15302.0, "cur_net": 5230.0, "util": 0.465, "pool_util": 1.11, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 329.0, "health": "Green"}, {"account": "Emerge Bright", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 285% of the included usage pool this month; month-end run rate is about $1,595 against a $560 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4001674.0, "cur_ubb": 1666.0, "cur_net": 1014.0, "util": 0.25, "pool_util": 2.848, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 8.0, "health": "Green"}, {"account": "Mount Sinai Medical Center", "bucket": "OVERAGE", "bucket_label": "Overage / true-up", "why": "On track to use 186% of the included usage pool this month; month-end run rate is about $783 against a $420 pool.", "play": "What to do: true up committed consumption or lift the budget so usage is not throttled, and confirm the cap type with the customer.", "attention": 4001096.0, "cur_ubb": 1082.0, "cur_net": 593.0, "util": 0.571, "pool_util": 1.864, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 14.0, "health": "Yellow"}, {"account": "Delta Dental of California", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +9% and usage grew +20% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3048044.0, "cur_ubb": 47528.0, "cur_net": 11089.0, "util": 0.448, "pool_util": 0.318, "budget_pct": 0.122, "budget_limit_type": "AlertingOnly", "top_surface": "IDE (chat/completions)", "seats_now": 516.0, "health": "Green"}, {"account": "Sentara Healthcare", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +10% and usage grew +42% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3016689.0, "cur_ubb": 16273.0, "cur_net": 3309.0, "util": 0.262, "pool_util": 0.469, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 416.0, "health": "Yellow"}, {"account": "Independence Blue Cross", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +6% and usage grew +21% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3012886.0, "cur_ubb": 12537.0, "cur_net": 0.0, "util": 0.347, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 349.0, "health": "Green"}, {"account": "Tenet Health", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +45% and usage grew +17% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3006565.0, "cur_ubb": 6429.0, "cur_net": 2574.0, "util": 0.272, "pool_util": 0.957, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 136.0, "health": "Green"}, {"account": "Covetrus", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +0% and usage grew +33% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3006183.0, "cur_ubb": 5988.0, "cur_net": 3255.0, "util": 0.374, "pool_util": 0.117, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 195.0, "health": "Green"}, {"account": "Cleveland Clinic", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +6% and usage grew +40% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3005181.0, "cur_ubb": 4787.0, "cur_net": 0.0, "util": 0.234, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 394.0, "health": "Yellow"}, {"account": "Best Western Hotel Group", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +1% and usage grew +46% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3004607.0, "cur_ubb": 4289.0, "cur_net": 0.0, "util": 0.248, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 318.0, "health": "Yellow"}, {"account": "EmblemHealth", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +8% and usage grew +286% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3003412.0, "cur_ubb": 3327.0, "cur_net": 423.0, "util": 0.282, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 85.0, "health": "Yellow"}, {"account": "GoFundMe", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +2% and usage grew +156% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3003111.0, "cur_ubb": 3003.0, "cur_net": 0.0, "util": 0.093, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 108.0, "health": "Yellow"}, {"account": "Henry Schein, Inc", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +12% and usage grew +18% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3000900.0, "cur_ubb": 814.0, "cur_net": 0.0, "util": 0.407, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 86.0, "health": "Green"}, {"account": "Sanford Health", "bucket": "EXPAND", "bucket_label": "Expand", "why": "Seats grew +167% and usage grew +89% this month.", "play": "What to do: propose a seat true-up or tier upgrade now, while both adoption and usage are climbing.", "attention": 3000344.0, "cur_ubb": 304.0, "cur_net": 0.0, "util": 0.325, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 40.0, "health": "Green"}, {"account": "Mercy", "bucket": "DEEPEN", "bucket_label": "Deepen adoption", "why": "Only 20% of paid seats are actually being used (28 of 141).", "play": "What to do: run enablement and activate champions with the at-risk users so paid seats turn into real usage.", "attention": 2005109.0, "cur_ubb": 4968.0, "cur_net": 0.0, "util": 0.199, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 141.0, "health": "Yellow"}, {"account": "Sutter Health", "bucket": "DEEPEN", "bucket_label": "Deepen adoption", "why": "Only 29% of paid seats are actually being used (27 of 92).", "play": "What to do: run enablement and activate champions with the at-risk users so paid seats turn into real usage.", "attention": 2002752.0, "cur_ubb": 2660.0, "cur_net": 0.0, "util": 0.293, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 92.0, "health": "Green"}, {"account": "Magnite", "bucket": "DEEPEN", "bucket_label": "Deepen adoption", "why": "Only 10% of paid seats are actually being used (21 of 206).", "play": "What to do: run enablement and activate champions with the at-risk users so paid seats turn into real usage.", "attention": 2002593.0, "cur_ubb": 2387.0, "cur_net": 0.0, "util": 0.102, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 206.0, "health": "Yellow"}, {"account": "Inova.org", "bucket": "DEEPEN", "bucket_label": "Deepen adoption", "why": "32% of seats are flagged at risk.", "play": "What to do: run enablement and activate champions with the at-risk users so paid seats turn into real usage.", "attention": 2001299.0, "cur_ubb": 1274.0, "cur_net": 0.0, "util": 0.48, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 25.0, "health": "Green"}, {"account": "Children's Mercy Hospital", "bucket": "DEEPEN", "bucket_label": "Deepen adoption", "why": "27% of seats are flagged at risk.", "play": "What to do: run enablement and activate champions with the at-risk users so paid seats turn into real usage.", "attention": 2000084.0, "cur_ubb": 73.0, "cur_net": 0.0, "util": 0.091, "pool_util": 0.0, "budget_pct": null, "budget_limit_type": null, "top_surface": "Third-party clients", "seats_now": 11.0, "health": "Green"}, {"account": "Dynata", "bucket": "MONITOR", "bucket_label": "Monitor", "why": "Steady on seats and usage.", "play": "No action needed this cycle; recheck at the next refresh.", "attention": 1003712.0, "cur_ubb": 3622.0, "cur_net": 964.0, "util": 0.556, "pool_util": 0.587, "budget_pct": null, "budget_limit_type": null, "top_surface": "IDE (chat/completions)", "seats_now": 90.0, "health": "Green"}];
+const ENGAGE = /*ENGAGE*/{"enabled": false};
+const DAILY = /*DAILY*/{"enabled": true, "prev_date": "2026-08-05", "date": "2026-08-06", "seats_delta": 32, "ubb_delta": 6366, "net_delta": 3581, "up": 17, "down": 9, "note": "Assigned seats +32, gross UBB +$6,366 across 26 moving accounts."};
+
+document.getElementById("subhead").innerHTML =
+  `${META.rep_name||"—"} &middot; ${META.segment||""} &middot; ${META.region||""} &nbsp;|&nbsp; `+
+  `Source: <span class="num">rev_source</span> (Kusto) &middot; as of ${META.as_of||"—"} &middot; scoped to accounts you own`;
+document.getElementById("footnote").innerHTML =
+  `<strong>Notes &amp; caveats.</strong> Seats = <em>assigned Copilot users</em> from the Salesforce-account Copilot health-score fact. `+
+  `UBB = usage-based Copilot consumption. <em>Gross</em> is usage before the included-spend pool; <em>net / billable</em> `+
+  `(from the burn-rate fact) is usage after the promo/standard pool deduction, still a usage-side figure and not final billed consumption. `+
+  `Engaged = distinct billable Copilot users; Util% = engaged / assigned seats (low util = shelfware). `+
+  `Pool util% = projected month-end spend / modeled included pool (a planning estimate, not a contracted cap); at or above 100% the account is projected into overage. `+
+  `Budget used% and Cap type are the <em>real</em> contracted budget from Odometer (get_budgets, enterprise-slug accounts only): a hard cap (PreventFurtherUsage) blocks usage at the limit, an alert cap warns but lets usage continue. `+
+  `Product mix / Top product = gross UBB $ grouped by the Copilot surface (integration) the usage came from, so Chat, CLI / coding agent, Code Review, third-party clients, App, and Mobile are separated. `+
+  `UBB MoM compares equal windows (${META.ubb_window||"prior vs current month-to-date"}). `+
+  `GRR30 = 30-day gross retention rate. 180d HWM = high-watermark of assigned users over trailing 180 days. `+
+  `Recommendations are generated by a fixed rules engine (scripts/recommend.py), identical for every rep. `+
+  `Scoped to sales_owner_id ${META.sales_owner_id||"—"}.`;
+
+const fmt = n => n===null||n===undefined ? "-" : Math.round(n).toLocaleString();
+const usd = n => n===null||n===undefined ? "-" : "$"+Math.round(n).toLocaleString();
+const usdk = n => n===null||n===undefined ? "-" : "$"+(Math.round(n/100)/10).toLocaleString()+"k";
+const pct = n => (n>0?"+":"")+Number(n).toFixed(1)+"%";
+const rpct = r => r===null||r===undefined ? "-" : (Math.round(r*1000)/10).toFixed(1)+"%";
+const cls = n => n>0?"up":(n<0?"down":"flat");
+const arrow = n => n>0?"&#9650;":(n<0?"&#9660;":"&#8226;");
+
+// KPIs
+const seatMoM = BOOK.seats_now - BOOK.seats_1mo;
+const seatMoMpct = BOOK.seats_1mo>0 ? seatMoM/BOOK.seats_1mo*100 : 0;
+const ubbMoM = BOOK.ubb_cur - BOOK.ubb_prev;
+const ubbMoMpct = BOOK.ubb_prev>0 ? ubbMoM/BOOK.ubb_prev*100 : 0;
+const redCount = DATA.filter(d=>d.health==="Red").length;
+const yellowCount = DATA.filter(d=>d.health==="Yellow").length;
+const growing = DATA.filter(d=>d.seat_delta>0).length;
+const declining = DATA.filter(d=>d.seat_delta<0).length;
+const hasNet = BOOK.net_cur!==null&&BOOK.net_cur!==undefined;
+const netMoM = hasNet ? (BOOK.net_cur-(BOOK.net_prev||0)) : null;
+const bookUtil = (BOOK.engaged_now!==null&&BOOK.engaged_now!==undefined&&BOOK.seats_now>0)
+  ? BOOK.engaged_now/BOOK.seats_now : null;
+const overageAccts = (BOOK.overage_accounts!==null&&BOOK.overage_accounts!==undefined)
+  ? BOOK.overage_accounts : DATA.filter(d=>d.pool_util!==null&&d.pool_util!==undefined&&d.pool_util>=1).length;
+const budgetData = DATA.filter(d=>d.budget_target!==null&&d.budget_target!==undefined&&d.budget_target>0);
+const hasBudget = budgetData.length>0;
+const bookBudgetAccts = (BOOK.budget_accounts!==null&&BOOK.budget_accounts!==undefined)?BOOK.budget_accounts:budgetData.length;
+const bookNearCap = (BOOK.budget_near_cap!==null&&BOOK.budget_near_cap!==undefined)
+  ? BOOK.budget_near_cap : budgetData.filter(d=>d.budget_pct!==null&&d.budget_pct>=0.8).length;
+const kpis = [
+  {label:"Assigned Copilot seats", val:fmt(BOOK.seats_now), chg:`vs ${fmt(BOOK.seats_1mo)} a month ago`, cl:"flat"},
+  {label:"Net seat change (MoM)", val:`${arrow(seatMoM)} ${fmt(Math.abs(seatMoM))}`, valcl:cls(seatMoM), delta:true, chg:`${pct(seatMoMpct)} &middot; ${growing} up / ${declining} down`, cl:cls(seatMoM)},
+  {label:"UBB gross (current)", val:usdk(BOOK.ubb_cur), chg:`vs ${usdk(BOOK.ubb_prev)} prior window`, cl:"flat"},
+  {label:"UBB net / billable (current)", val:hasNet?usdk(BOOK.net_cur):"-", chg:hasNet?`${netMoM>=0?"+":""}${usdk(netMoM)} MoM &middot; usage-side, post-pool`:"burn-rate query not run", cl:hasNet?cls(netMoM):"flat"},
+  {label:"Consumption change (MoM)", val:`${arrow(ubbMoM)} ${usdk(Math.abs(ubbMoM))}`, valcl:cls(ubbMoM), delta:true, chg:`${pct(ubbMoMpct)} MoM (gross)`, cl:cls(ubbMoM)},
+  {label:"Book utilization", val:bookUtil!==null?rpct(bookUtil):"-", chg:bookUtil!==null?`${fmt(BOOK.engaged_now)} engaged of ${fmt(BOOK.seats_now)} seats`:"engaged users not loaded", cl:bookUtil!==null&&bookUtil<0.4?"down":"flat"},
+  {label:"Overage-risk accounts", val:overageAccts, chg:`projected past included pool`, cl:overageAccts>0?"down":"flat"},
+  {label:"Near budget cap", val:hasBudget?bookNearCap:"-", chg:hasBudget?`&ge;80% of contracted budget &middot; ${bookBudgetAccts} tracked`:"budgets not loaded", cl:hasBudget&&bookNearCap>0?"down":"flat"},
+  {label:"Accounts w/ Copilot", val:DATA.length, chg:`${META.total_owned?("of "+META.total_owned+" owned"):"in book"}`, cl:"flat"},
+  {label:"Accounts growing seats", val:growing, chg:`${declining} declining`, cl:"up"},
+  {label:"Red-health accounts", val:redCount, chg:`${yellowCount} yellow`, cl:redCount>0?"down":"flat"},
+  {label:"Total users at risk", val:fmt(DATA.reduce((s,d)=>s+(d.risk||0),0)), chg:`across the book`, cl:"down"}
+];
+document.getElementById("kpis").innerHTML = kpis.map(k=>
+  `<div class="kpi ${k.delta?'delta':''}"><div class="label">${k.label}</div><div class="val ${k.valcl||''}">${k.val}</div><div class="chg ${k.cl}">${k.chg}</div></div>`).join("");
+
+// Daily delta banner (day-over-day, populated by the daily generate step)
+(function(){
+  const el = document.getElementById("dailyDelta");
+  if(!DAILY || !DAILY.enabled){ el.style.display="none"; return; }
+  const sChg = DAILY.seats_delta||0, uChg = DAILY.ubb_delta||0, nChg = DAILY.net_delta||0;
+  const chip = (label,val,d)=>`<span class="dd-chip"><span class="dd-l">${label}</span>`+
+    `<span class="dd-v ${cls(d)}">${arrow(d)} ${val}</span></span>`;
+  el.innerHTML =
+    `<div class="daily"><span class="dd-title">Since ${DAILY.prev_date||"yesterday"}</span>`+
+    chip("Assigned seats", fmt(Math.abs(sChg)), sChg)+
+    chip("UBB gross", usdk(Math.abs(uChg)), uChg)+
+    (DAILY.net_delta!==null&&DAILY.net_delta!==undefined?chip("UBB net", usdk(Math.abs(nChg)), nChg):"")+
+    `<span class="dd-chip"><span class="dd-l">Accounts moved</span><span class="dd-v flat">`+
+      `${DAILY.up||0} up / ${DAILY.down||0} down</span></span>`+
+    `<span class="dd-note">${DAILY.note||""}</span></div>`;
+})();
+
+// Recommendations (top 8 by attention, excluding pure Monitor unless nothing else)
+const actionRecs = RECS.filter(r=>r.bucket!=="MONITOR");
+const showRecs = (actionRecs.length?actionRecs:RECS).slice(0,8);
+document.getElementById("recs").innerHTML = showRecs.map(r=>
+  `<div class="rec ${r.bucket}">
+     <div class="top"><span class="name">${r.account}</span><span class="badge">${r.bucket_label}</span></div>
+     <div class="why">${r.why}</div>
+     <div class="play">${r.play}</div>
+     <div class="meta">UBB ${usd(r.cur_ubb)}${r.cur_net!==null&&r.cur_net!==undefined?` &middot; net ${usd(r.cur_net)}`:""} &middot; ${fmt(r.seats_now)} seats${r.util!==null&&r.util!==undefined?` &middot; util ${rpct(r.util)}`:""}${r.budget_pct!==null&&r.budget_pct!==undefined?` &middot; budget ${rpct(r.budget_pct)}${r.budget_limit_type==="PreventFurtherUsage"?" (hard cap)":r.budget_limit_type?" (alert)":""}`:(r.pool_util!==null&&r.pool_util!==undefined?` &middot; pool ${rpct(r.pool_util)}`:"")}${r.top_surface?` &middot; top: ${r.top_surface}`:""} &middot; ${r.health}</div>
+   </div>`).join("");
+
+// Charts
+Chart.defaults.color="#8b949e";
+Chart.defaults.font.family="-apple-system,Segoe UI,sans-serif";
+const gridc="rgba(139,148,158,.12)";
+
+const topSeats=[...DATA].sort((a,b)=>b.seat_delta-a.seat_delta).slice(0,8);
+new Chart(seatChart,{type:"bar",data:{labels:topSeats.map(d=>d.account),
+  datasets:[{data:topSeats.map(d=>d.seat_delta),
+    backgroundColor:topSeats.map(d=>d.seat_delta>=0?"#3fb950":"#f85149"),borderRadius:4}]},
+  options:{indexAxis:"y",plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw>0?"+":""}${c.raw} seats`}}},
+    scales:{x:{grid:{color:gridc}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+const topUbb=[...DATA].filter(d=>d.cur_ubb>1000).sort((a,b)=>b.ubb_delta-a.ubb_delta).slice(0,8);
+new Chart(ubbChart,{type:"bar",data:{labels:topUbb.map(d=>d.account),
+  datasets:[{data:topUbb.map(d=>d.ubb_delta),
+    backgroundColor:topUbb.map(d=>d.ubb_delta>=0?"#2f81f7":"#f85149"),borderRadius:4}]},
+  options:{indexAxis:"y",plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw>0?"+":""}$${Math.round(c.raw).toLocaleString()} MoM`}}},
+    scales:{x:{grid:{color:gridc},ticks:{callback:v=>"$"+(v/1000)+"k"}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+const hc={Green:0,Yellow:0,Red:0};DATA.forEach(d=>{if(hc[d.health]!==undefined)hc[d.health]++;});
+new Chart(healthChart,{type:"doughnut",data:{labels:["Green","Yellow","Red"],
+  datasets:[{data:[hc.Green,hc.Yellow,hc.Red],backgroundColor:["#3fb950","#d29922","#f85149"],borderWidth:0}]},
+  options:{cutout:"62%",plugins:{legend:{position:"bottom",labels:{padding:14,font:{size:12}}}}}});
+
+// Product / surface mix (book-level) — which Copilot products the book consumes.
+const SURF_COLOR={
+  "IDE (chat/completions)":"#2f81f7","CLI / Agent":"#a371f7","Code Review":"#3fb950",
+  "Third-party clients":"#d29922","Copilot App":"#db61a2","Mobile":"#8b949e","Other":"#6e7681"};
+const surfColor=l=>SURF_COLOR[l]||"#6e7681";
+const surfWrap=document.getElementById("surfaceWrap");
+const surfSel=document.getElementById("surfFilter");
+const bookSurf=BOOK.surfaces||null;
+let surfChart=null;
+function renderSurf(surfaces){
+  if(surfChart){surfChart.destroy();surfChart=null;}
+  if(!surfaces||!Object.keys(surfaces).length){
+    surfWrap.innerHTML=`<div class="empty">No product-mix data for this selection.</div>`;return;
+  }
+  const entries=Object.entries(surfaces).sort((a,b)=>b[1]-a[1]);
+  const tot=entries.reduce((s,e)=>s+e[1],0)||1;
+  surfWrap.innerHTML=`<div class="surfmix"><div><canvas id="surfChart" style="max-height:190px;"></canvas></div>`+
+    `<div class="slegend">`+entries.map(([l,v])=>
+      `<div class="row"><span class="sw" style="background:${surfColor(l)}"></span>`+
+      `<span class="nm">${l}</span><span class="amt">${usdk(v)} &middot; ${(v/tot*100).toFixed(0)}%</span></div>`).join("")+
+    `</div></div>`;
+  surfChart=new Chart(document.getElementById("surfChart"),{type:"doughnut",
+    data:{labels:entries.map(e=>e[0]),datasets:[{data:entries.map(e=>e[1]),
+      backgroundColor:entries.map(e=>surfColor(e[0])),borderWidth:0}]},
+    options:{cutout:"60%",plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${c.label}: $${Math.round(c.raw).toLocaleString()} (${(c.raw/tot*100).toFixed(0)}%)`}}}}});
+}
+if((bookSurf&&Object.keys(bookSurf).length)||DATA.some(d=>d.surfaces&&Object.keys(d.surfaces).length)){
+  const acctSurf=DATA.filter(d=>d.surfaces&&Object.keys(d.surfaces).length)
+    .map(d=>({name:d.account,surfaces:d.surfaces,tot:Object.values(d.surfaces).reduce((s,v)=>s+v,0)}))
+    .sort((a,b)=>b.tot-a.tot);
+  surfSel.innerHTML=`<option value="__book__">Total book (${acctSurf.length} accounts)</option>`+
+    acctSurf.map((a,i)=>`<option value="${i}">${a.name}</option>`).join("");
+  surfSel.addEventListener("change",()=>{
+    const v=surfSel.value;
+    renderSurf(v==="__book__"?bookSurf:acctSurf[+v].surfaces);
+  });
+  renderSurf(bookSurf||acctSurf.reduce((acc,a)=>{for(const[k,val]of Object.entries(a.surfaces))acc[k]=(acc[k]||0)+val;return acc;},{}));
+}else{
+  surfSel.style.display="none";
+  surfWrap.innerHTML=`<div class="empty">Product mix not loaded. Run queries/07-surface-mix.kql and merge the per-account <span class="num">surfaces</span> object to see Chat vs CLI/Agent vs Code Review vs third-party split.</div>`;
+}
+
+// Budget & cap watch — real contracted Odometer budgets, sorted by % consumed.
+// Shows the top 10 by default; "Show all" reveals every tracked budget.
+const bw=document.getElementById("budgetWatch");
+const BUDGET_TOP_N=10;
+if(hasBudget){
+  const sorted=[...budgetData].sort((a,b)=>(b.budget_pct||0)-(a.budget_pct||0));
+  const bwRow=d=>{
+    const p=d.budget_pct||0, pctTxt=(p*100).toFixed(0)+"%";
+    const col=p>=1?"#f85149":p>=0.8?"#d29922":"#3fb950";
+    const hard=d.budget_limit_type==="PreventFurtherUsage";
+    return `<div class="bwrow">
+      <div class="bwtop"><span class="bwname">${d.account}</span>
+        <span class="captype ${hard?'hard':'soft'}">${hard?"Hard cap":"Alert cap"}</span></div>
+      <div class="bar"><span style="width:${Math.min(p*100,100).toFixed(0)}%;background:${col}"></span></div>
+      <div class="bwsub">${pctTxt} of ${usd(d.budget_target)} &middot; ${usd(d.budget_current)} used${p>=1?(hard?" &middot; at hard cap (usage blocked)":" &middot; over alert cap (usage still flowing)"):""}</div>
+    </div>`;};
+  let bwExpanded=false;
+  const paintBudgets=()=>{
+    const shown=bwExpanded?sorted:sorted.slice(0,BUDGET_TOP_N);
+    let html=shown.map(bwRow).join("");
+    if(sorted.length>BUDGET_TOP_N){
+      html+=`<button id="bwToggle" class="bwmore">${bwExpanded?"Show top "+BUDGET_TOP_N:"Show all "+sorted.length+" budgets"}</button>`;
+    }
+    bw.innerHTML=html;
+    const btn=document.getElementById("bwToggle");
+    if(btn) btn.addEventListener("click",()=>{bwExpanded=!bwExpanded;paintBudgets();});
+  };
+  paintBudgets();
+}else{
+  document.getElementById('budgetCard').style.display='none';
+  document.querySelectorAll('th[data-k="budget_pct"],th[data-k="budget_limit_type"]').forEach(el=>el.style.display='none');
+}
+
+// Seat delta vs consumption delta quadrant (opposite-direction accounts pop out)
+const QCAP=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const quadColor=(x,y)=> x>=0&&y>=0 ? "#3fb950" : x<0&&y>=0 ? "#2f81f7" : x<0&&y<0 ? "#f85149" : "#d29922";
+const qpts=DATA.filter(d=>d.seat_pct!==null&&d.seat_pct!==undefined&&d.ubb_pct!==null&&d.ubb_pct!==undefined).map(d=>({
+  x:QCAP(d.seat_pct,-100,120), y:QCAP(d.ubb_pct,-100,160),
+  rawx:d.seat_pct, rawy:d.ubb_pct, label:d.account,
+  r:QCAP(3+Math.sqrt(Math.max(d.cur_ubb||0,0))/25,4,22),
+  c:quadColor(d.seat_pct,d.ubb_pct)}));
+const deepen=DATA.filter(d=>d.seat_delta<0&&d.ubb_pct>=15).map(d=>d.account);
+const gap=DATA.filter(d=>d.seat_delta>0&&d.ubb_pct<=-15).map(d=>d.account);
+document.getElementById("quadNote").innerHTML=
+  `<span class="up">&#9632;</span> both up &nbsp; <span style="color:#2f81f7">&#9632;</span> seats down, usage up (deepening) &nbsp; `+
+  `<span class="down">&#9632;</span> both down &nbsp; <span style="color:#d29922">&#9632;</span> seats up, usage down (adoption gap)`+
+  (deepen.length?`<br><strong>Deepening (fewer seats, more usage):</strong> ${deepen.join(", ")}.`:"")+
+  (gap.length?`<br><strong>Adoption gap (more seats, less usage):</strong> ${gap.join(", ")}.`:"");
+const quadBg={id:"quadBg",beforeDatasetsDraw(ch){const a=ch.chartArea,s=ch.scales;if(!a)return;
+  const x0=QCAP(s.x.getPixelForValue(0),a.left,a.right),y0=QCAP(s.y.getPixelForValue(0),a.top,a.bottom);
+  const g=ch.ctx;g.save();g.globalAlpha=.06;
+  g.fillStyle="#3fb950";g.fillRect(x0,a.top,a.right-x0,y0-a.top);
+  g.fillStyle="#2f81f7";g.fillRect(a.left,a.top,x0-a.left,y0-a.top);
+  g.fillStyle="#f85149";g.fillRect(a.left,y0,x0-a.left,a.bottom-y0);
+  g.fillStyle="#d29922";g.fillRect(x0,y0,a.right-x0,a.bottom-y0);
+  g.globalAlpha=1;g.strokeStyle="rgba(139,148,158,.45)";g.lineWidth=1;
+  g.beginPath();g.moveTo(x0,a.top);g.lineTo(x0,a.bottom);g.moveTo(a.left,y0);g.lineTo(a.right,y0);g.stroke();g.restore();}};
+new Chart(document.getElementById("quadChart"),{type:"bubble",
+  data:{datasets:[{data:qpts,backgroundColor:qpts.map(p=>p.c+"cc"),borderColor:qpts.map(p=>p.c),borderWidth:1}]},
+  options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw.label}: seats ${c.raw.rawx>0?"+":""}${c.raw.rawx}%, usage ${c.raw.rawy>0?"+":""}${c.raw.rawy}%`}}},
+    scales:{x:{title:{display:true,text:"Seat change MoM (%)"},grid:{color:gridc},ticks:{callback:v=>v+"%"}},
+            y:{title:{display:true,text:"Consumption change MoM (%)"},grid:{color:gridc},ticks:{callback:v=>v+"%"}}}},
+  plugins:[quadBg]});
+
+// Watchlist = SAVE + INVESTIGATE recs
+const watch = RECS.filter(r=>r.bucket==="SAVE"||r.bucket==="INVESTIGATE").slice(0,8);
+document.getElementById("watch").innerHTML = watch.length ? watch.map(w=>
+  `<div class="rec ${w.bucket}" style="margin-bottom:10px;">
+     <div class="top"><span class="name">${w.account}</span><span class="badge">${w.bucket_label}</span></div>
+     <div class="why">${w.why}</div>
+     <div class="play">${w.play}</div>
+     <div class="meta">UBB ${usd(w.cur_ubb)} &middot; ${fmt(w.seats_now)} seats</div>
+   </div>`).join("") : `<div class="empty">No churn or disengagement signals in the book. Nice.</div>`;
+
+// Engagement scatter
+const eDiv=document.getElementById("engage");
+if(ENGAGE && ENGAGE.enabled){
+  const pts=DATA.filter(d=>d.meetings_90d!==null&&d.meetings_90d!==undefined&&d.cur_ubb>0)
+    .map(d=>({x:d.meetings_90d,y:d.cur_ubb,label:d.account}));
+  eDiv.innerHTML=`<div class="corrbox">
+      <div><div class="big ${ENGAGE.correlation>=0?'up':'down'}">r = ${Number(ENGAGE.correlation).toFixed(2)}</div>
+      <div class="footnote" style="margin:0;">Pearson corr, meetings(90d) vs current UBB</div></div>
+      <div class="footnote" style="margin:0;flex:1;">${ENGAGE.note||""}</div>
+    </div><canvas id="engChart"></canvas>`;
+  new Chart(document.getElementById("engChart"),{type:"scatter",
+    data:{datasets:[{data:pts,backgroundColor:"#2f81f7"}]},
+    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw.label}: ${c.raw.x} mtgs, $${Math.round(c.raw.y).toLocaleString()}`}}},
+      scales:{x:{title:{display:true,text:"Customer meetings (last 90 days)"},grid:{color:gridc}},
+              y:{title:{display:true,text:"UBB gross (current, $)"},grid:{color:gridc},ticks:{callback:v=>"$"+(v/1000)+"k"}}}}});
+} else {
+  eDiv.innerHTML=`<div class="empty">Calendar engagement not connected. Run the skill's engagement phase (WorkIQ) to correlate meeting cadence with Copilot usage.</div>`;
+}
+
+// Table
+let sortK="seat_delta", sortDir=-1;
+function render(){
+  const q=document.getElementById("search").value.toLowerCase();
+  const hf=document.getElementById("healthFilter").value;
+  const vf=document.getElementById("viewFilter").value;
+  let rows=DATA.filter(d=>(d.account||"").toLowerCase().includes(q))
+    .filter(d=>!hf||d.health===hf)
+    .filter(d=>{
+      if(vf==="growth")return d.seat_delta>0;
+      if(vf==="declining")return d.seat_delta<0;
+      if(vf==="ubbup")return d.ubb_delta>0;
+      if(vf==="ubbdown")return d.ubb_delta<0;
+      return true;});
+  rows.sort((a,b)=>{let x=a[sortK],y=b[sortK];
+    if(typeof x==="string")return x.localeCompare(y)*sortDir;
+    return((x??-1e15)-(y??-1e15))*sortDir;});
+  document.getElementById("tbody").innerHTML=rows.map(d=>{
+    const risky=d.health==="Red"||d.seat_pct<=-10||d.grr<0.9;
+    return `<tr class="${risky?'risk-row':''}">
+      <td>${d.account}</td>
+      <td style="text-align:center"><span class="pill ${d.health||'Unknown'}">${d.health||'?'}</span></td>
+      <td class="num">${fmt(d.seats_now)}</td>
+      <td class="num ${cls(d.seat_delta)}">${d.seat_delta>0?"+":""}${d.seat_delta}</td>
+      <td class="num ${cls(d.seat_pct)}">${pct(d.seat_pct)}</td>
+      <td class="num">${fmt(d.seats_3mo)}</td>
+      <td class="num">${fmt(d.hwm)}</td>
+      <td class="num">${d.engaged===null||d.engaged===undefined?"-":fmt(d.engaged)}</td>
+      <td class="num ${d.util!==null&&d.util!==undefined&&d.util<0.4?'down':''}">${rpct(d.util)}</td>
+      <td class="num">${fmt(d.risk)}</td>
+      <td class="num ${d.grr<0.9?'down':''}">${Number(d.grr).toFixed(2)}</td>
+      <td class="num">${usd(d.cur_ubb)}</td>
+      <td class="num">${d.net_cur===null||d.net_cur===undefined?"-":usd(d.net_cur)}</td>
+      <td class="num ${cls(d.ubb_delta)}">${d.ubb_delta>0?"+":""}${usd(d.ubb_delta)}</td>
+      <td class="num ${cls(d.ubb_pct)}">${pct(d.ubb_pct)}</td>
+      <td class="num ${d.pool_util!==null&&d.pool_util!==undefined&&d.pool_util>=1?'down':''}">${rpct(d.pool_util)}</td>
+      ${hasBudget?`<td class="num ${d.budget_pct!==null&&d.budget_pct!==undefined&&d.budget_pct>=0.8?'down':''}">${rpct(d.budget_pct)}</td>
+      <td style="text-align:center">${d.budget_limit_type?`<span class="captype ${d.budget_limit_type==="PreventFurtherUsage"?'hard':'soft'}">${d.budget_limit_type==="PreventFurtherUsage"?"Hard":"Alert"}</span>`:"-"}</td>`:''}
+      <td>${d.top_surface?`<span class="tsurface">${d.top_surface}</span>`:"-"}</td>
+      <td class="num">${d.meetings_90d===null||d.meetings_90d===undefined?"-":d.meetings_90d}</td>
+    </tr>`;}).join("");
+}
+document.querySelectorAll("th").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.dataset.k;if(sortK===k)sortDir*=-1;else{sortK=k;sortDir=-1;}render();}));
+document.getElementById("search").addEventListener("input",render);
+document.getElementById("healthFilter").addEventListener("change",render);
+document.getElementById("viewFilter").addEventListener("change",render);
+render();
+</script>
+</body>
+</html>
