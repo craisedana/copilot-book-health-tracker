@@ -1,10 +1,10 @@
-# Copilot Book Health — 2026-09-12
+# Copilot Book Health — 2026-09-13
 
-Day-over-day change since 2026-09-11:
+Day-over-day change since 2026-09-12:
 
-- Assigned Copilot seats: +410
-- Gross UBB: +$218,099
-- Net / billable UBB: +$118,484
-- Accounts moving: 34 up / 2 down
+- Assigned Copilot seats: +463
+- Gross UBB: +$231,947
+- Net / billable UBB: +$124,155
+- Accounts moving: 35 up / 1 down
 
 Published: https://craisedana.github.io/copilot-book-health-tracker/
