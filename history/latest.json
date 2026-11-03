@@ -1,14 +1,14 @@
 {
-  "as_of": "2026-11-02",
+  "as_of": "2026-11-03",
   "delta": {
     "enabled": true,
-    "prev_date": "2026-11-01",
-    "date": "2026-11-02",
-    "seats_delta": 10984,
-    "ubb_delta": 11166203,
-    "net_delta": 6069103,
+    "prev_date": "2026-11-02",
+    "date": "2026-11-03",
+    "seats_delta": 11975,
+    "ubb_delta": 12060262,
+    "net_delta": 6555103,
     "up": 36,
-    "down": 3,
-    "note": "Assigned seats +10984, gross UBB +$11,166,203 across 39 moving accounts."
+    "down": 2,
+    "note": "Assigned seats +11975, gross UBB +$12,060,262 across 38 moving accounts."
   }
 }
